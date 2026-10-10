@@ -2319,6 +2319,23 @@ void smp_br_process_link_key(tSMP_CB* p_cb, tSMP_INT_DATA* /* p_data */) {
   tSMP_STATUS status = SMP_PAIR_FAIL_UNKNOWN;
 
   log::verbose("addr:{}", p_cb->pairing_bda);
+  BtmDevice* p_device = btm_get_dev(p_cb->pairing_bda);
+  if (stack_config_get_interface()->get_pts_smp_bredr_pairing_preserve_le_keys()) {
+    if (p_device) {
+      if (p_device->sec_rec.is_le_link_key_known()) {
+        bool le_authed = p_device->sec_rec.sec_flags & BTM_SEC_LE_LINK_KEY_AUTHED;
+        bool br_authed = p_device->sec_rec.sec_flags & BTM_SEC_LINK_KEY_AUTHED;
+        if (le_authed || !br_authed) {
+          log::verbose("LE key exists and BR/EDR key is not higher security, skip deriving LE LTK from BR/EDR LK");
+          p_device->device_type |= BT_DEVICE_TYPE_BLE;
+          smp_update_key_mask(p_cb, SMP_SEC_KEY_TYPE_ENC, false);
+          smp_br_select_next_key(p_cb, NULL);
+          return;
+        }
+      }
+    }
+  }
+
   if (!smp_calculate_long_term_key_from_link_key(p_cb)) {
     log::error("calc LTK failed");
     tSMP_INT_DATA smp_int_data;
@@ -2327,7 +2344,7 @@ void smp_br_process_link_key(tSMP_CB* p_cb, tSMP_INT_DATA* /* p_data */) {
     return;
   }
 
-  BtmDevice* p_device = btm_get_dev(p_cb->pairing_bda);
+//  BtmDevice* p_device = btm_get_dev(p_cb->pairing_bda);
   if (p_device) {
     log::verbose("dev_type={}", p_device->device_type);
     p_device->device_type |= BT_DEVICE_TYPE_BLE;
